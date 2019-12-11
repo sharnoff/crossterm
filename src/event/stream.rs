@@ -119,6 +119,7 @@ impl Stream for EventStream {
 
 impl Drop for EventStream {
     fn drop(&mut self) {
+        println!("DPPIIING");
         self.stream_wake_thread_should_shutdown
             .store(true, Ordering::SeqCst);
         let _ = self.poll_internal_waker.wake();
