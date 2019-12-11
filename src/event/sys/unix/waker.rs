@@ -53,6 +53,7 @@ impl Waker {
     ///
     /// Readiness is set to `Ready::readable()`.
     pub(crate) fn wake(&self) -> Result<()> {
+        println!("Waking poll ...\r");
         self.inner.lock().unwrap().wake()
     }
 

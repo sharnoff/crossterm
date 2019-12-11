@@ -58,18 +58,18 @@ async fn main() -> Result<()> {
     enable_raw_mode()?;
 
     let thread_a = thread::spawn(move|| {
-        println!("EventStream A");
+        println!("EventStream A\r");
         block_on(print_events("Thread A", Duration::from_secs(5)));
     });
 
     let thread_b = thread::spawn(move || {
-        println!("EventStream B");
+        println!("EventStream B\r");
         block_on(print_events("Thread B", Duration::from_secs(8)));
     });
 
-    println!("joining A"); /* stream a is dropped after 5 secs */
+    println!("joining A\r"); /* stream a is dropped after 5 secs */
     thread_a.join();
-    println!("joining B"); /* stream b is dropped after 8 secs */
+    println!("joining B\r"); /* stream b is dropped after 8 secs */
     thread_b.join();
 
     println!("joined A and B");
