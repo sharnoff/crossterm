@@ -25,13 +25,6 @@ use std::sync::{Mutex, Arc};
 use futures::executor::block_on;
 use tokio::task;
 
-const HELP: &str = r#"EventStream based on futures::Stream with tokio
- - Keyboard, mouse and terminal resize events enabled
- - Prints "." every second if there's no event
- - Hit "c" to print current cursor position
- - Use Esc to quit
-"#;
-
 async fn print_events(name: &str, duration: Duration) {
     let mut reader = EventStream::new();
 
@@ -51,14 +44,6 @@ async fn print_events(name: &str, duration: Duration) {
                 match maybe_event {
                     Some(Ok(event)) => {
                         println!("ffrom {} | Event::{:?} \r ", name, event);
-
-                        if event == Event::Key(KeyCode::Char('c').into()) {
-                            println!("Cursor position: {:?} \r", position());
-                        }
-
-                        if event == Event::Key(KeyCode::Esc.into()) {
-                            break;
-                        }
                     }
                     Some(Err(e)) => println!("Error: {:?}\r", e),
                     None => break,
