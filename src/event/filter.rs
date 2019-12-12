@@ -6,6 +6,7 @@ pub(crate) trait Filter: Send + Sync + 'static {
     fn eval(&self, event: &InternalEvent) -> bool;
 }
 
+/// Filter for cursor position events.
 #[cfg(unix)]
 pub(crate) struct CursorPositionFilter;
 
@@ -20,6 +21,7 @@ impl Filter for CursorPositionFilter {
     }
 }
 
+/// Filter for events.
 pub(crate) struct EventFilter;
 
 impl Filter for EventFilter {
@@ -38,6 +40,7 @@ impl Filter for EventFilter {
     }
 }
 
+/// Filter for internal events.
 pub(crate) struct InternalEventFilter;
 
 impl Filter for InternalEventFilter {

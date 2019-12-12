@@ -35,7 +35,7 @@ impl WakerInner {
 /// Allows to wake up the `mio::Poll::poll()` method.
 #[derive(Clone)]
 pub(crate) struct Waker {
-    inner: Arc<Mutex<WakerInner>>,
+    inner: WakerInner,
 }
 
 impl Waker {
@@ -45,7 +45,7 @@ impl Waker {
     /// it in order to use it.
     pub(crate) fn new() -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(Mutex::new(WakerInner::new())),
+            inner: WakerInner::new(),
         })
     }
 
@@ -53,14 +53,14 @@ impl Waker {
     ///
     /// Readiness is set to `Ready::readable()`.
     pub(crate) fn wake(&self) -> Result<()> {
-        self.inner.lock().unwrap().wake()
+        self.wake()
     }
 
     /// Resets the state so the same waker can be reused.
     ///
     /// Readiness is set back to `Ready::empty()`.
     pub(crate) fn reset(&self) -> Result<()> {
-        self.inner.lock().unwrap().reset()
+        self.reset()
     }
 }
 
@@ -73,8 +73,6 @@ impl Evented for Waker {
         opts: PollOpt,
     ) -> ::std::io::Result<()> {
         self.inner
-            .lock()
-            .unwrap()
             .registration
             .register(poll, token, interest, opts)
     }
@@ -87,14 +85,12 @@ impl Evented for Waker {
         opts: PollOpt,
     ) -> ::std::io::Result<()> {
         self.inner
-            .lock()
-            .unwrap()
             .registration
             .reregister(poll, token, interest, opts)
     }
 
     #[allow(deprecated)]
     fn deregister(&self, poll: &Poll) -> ::std::io::Result<()> {
-        self.inner.lock().unwrap().registration.deregister(poll)
+        self.inner.registration.deregister(poll)
     }
 }

@@ -8,9 +8,7 @@ use lazy_static::lazy_static;
 
 use crate::Result;
 
-#[cfg(feature = "event-stream")]
 pub(crate) mod waker;
-
 pub(crate) mod parse;
 pub(crate) mod poll;
 
@@ -18,6 +16,20 @@ const ENABLE_MOUSE_MODE: u32 = 0x0010 | 0x0080 | 0x0008;
 
 lazy_static! {
     static ref ORIGINAL_CONSOLE_MODE: Mutex<Option<u32>> = Mutex::new(None);
+}
+
+pub(crate) fn enable_mouse_capture() -> Result<()> {
+    let mode = ConsoleMode::from(Handle::current_in_handle()?);
+    init_original_console_mode(mode.mode()?);
+    mode.set_mode(ENABLE_MOUSE_MODE)?;
+
+    Ok(())
+}
+
+pub(crate) fn disable_mouse_capture() -> Result<()> {
+    let mode = ConsoleMode::from(Handle::current_in_handle()?);
+    mode.set_mode(original_console_mode())?;
+    Ok(())
 }
 
 /// Initializes the default console color. It will will be skipped if it has already been initialized.
@@ -36,18 +48,4 @@ fn original_console_mode() -> u32 {
         .lock()
         .unwrap()
         .expect("Original console mode not set")
-}
-
-pub(crate) fn enable_mouse_capture() -> Result<()> {
-    let mode = ConsoleMode::from(Handle::current_in_handle()?);
-    init_original_console_mode(mode.mode()?);
-    mode.set_mode(ENABLE_MOUSE_MODE)?;
-
-    Ok(())
-}
-
-pub(crate) fn disable_mouse_capture() -> Result<()> {
-    let mode = ConsoleMode::from(Handle::current_in_handle()?);
-    mode.set_mode(original_console_mode())?;
-    Ok(())
 }

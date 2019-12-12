@@ -6,62 +6,47 @@ use winapi::{
     shared::winerror::WAIT_TIMEOUT,
     um::{
         synchapi::WaitForMultipleObjects,
-        winbase::{INFINITE, WAIT_ABANDONED_0, WAIT_FAILED, WAIT_OBJECT_0},
+        winbase::{INFINITE, WAIT_ABANDONED_0, WAIT_OBJECT_0},
     },
 };
 
 use crate::Result;
 
-#[cfg(feature = "event-stream")]
-pub(crate) use super::waker::Waker;
+use super::super::Waker;
 
-pub(crate) struct WinApiPoll {
-    #[cfg(feature = "event-stream")]
-    waker: Waker,
-}
+pub(crate) struct WinApiPoll;
 
 impl WinApiPoll {
-    #[cfg(not(feature = "event-stream"))]
     pub(crate) fn new() -> Result<WinApiPoll> {
         Ok(WinApiPoll {})
     }
-
-    #[cfg(feature = "event-stream")]
-    pub(crate) fn new() -> Result<WinApiPoll> {
-        Ok(WinApiPoll {
-            waker: Waker::new()?,
-        })
-    }
 }
 
 impl WinApiPoll {
-    pub fn poll(&mut self, timeout: Option<Duration>) -> Result<Option<bool>> {
-        let dw_millis = if let Some(duration) = timeout {
-            duration.as_millis() as u32
-        } else {
-            INFINITE
-        };
+    pub fn poll(&mut self, timeout: Option<Duration>, waker: Option<&Waker>) -> Result<Option<bool>> {
+        let dw_millis = timeout
+            .map_or(INFINITE, |duration| duration.as_millis() as u32);
 
         let console_handle = Handle::current_in_handle()?;
 
-        #[cfg(feature = "event-stream")]
-        let semaphore = self.waker.semaphore();
-        #[cfg(feature = "event-stream")]
-        let handles = &[*console_handle, **semaphore.handle()];
-        #[cfg(not(feature = "event-stream"))]
-        let handles = &[*console_handle];
+        let (size, handles) = if let Some(waker) = waker {
+            (1, &[*console_handle, **waker.semaphore().handle()])
+        }else {
+            &[*console_handle]
+        };
 
+        // Wait for handles to trigger for the given duration.
         let output =
             unsafe { WaitForMultipleObjects(handles.len() as u32, handles.as_ptr(), 0, dw_millis) };
 
         match output {
+            // Input handle triggered.
             output if output == WAIT_OBJECT_0 => {
-                // input handle triggered
                 Ok(Some(true))
             }
+            // Semaphore handle triggered.
             #[cfg(feature = "event-stream")]
             output if output == WAIT_OBJECT_0 + 1 => {
-                // semaphore handle triggered
                 let _ = self.waker.reset();
                 Err(io::Error::new(
                     io::ErrorKind::Interrupted,
@@ -69,16 +54,12 @@ impl WinApiPoll {
                 )
                 .into())
             }
+            // Timeout elapsed.
             WAIT_TIMEOUT | WAIT_ABANDONED_0 => {
-                // timeout elapsed
                 Ok(None)
             }
-            WAIT_FAILED => Err(io::Error::last_os_error().into()),
-            _ => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "WaitForMultipleObjects returned unexpected result.",
-            )
-            .into()),
+            // Unexpected error during waiting.
+            _ => Err(io::Error::last_os_error().into()),
         }
     }
 

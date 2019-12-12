@@ -6,14 +6,16 @@ use crate::ErrorKind;
 use super::source::unix::UnixInternalEventSource;
 #[cfg(windows)]
 use super::source::windows::WindowsEventSource;
-#[cfg(feature = "event-stream")]
-use super::sys::Waker;
-use super::{filter::Filter, source::EventSource, timeout::PollTimeout, InternalEvent, Result};
 
-/// Can be used to read `InternalEvent`s.
+use super::{sys::Waker, filter::Filter, source::EventSource, timeout::PollTimeout, InternalEvent, Result};
+
+/// Reads `InternalEvent`s.
 pub(crate) struct InternalEventReader {
+    // Storage for occurred events.
     events: VecDeque<InternalEvent>,
+    // The source from witch events are read.
     source: Option<Box<dyn EventSource>>,
+    // Temporary storage for events not adhering to the filter.
     skipped_events: Vec<InternalEvent>,
 }
 
@@ -35,22 +37,18 @@ impl Default for InternalEventReader {
 }
 
 impl InternalEventReader {
-    /// Returns a `Waker` allowing to wake/force the `poll` method to return `Ok(false)`.
-    #[cfg(feature = "event-stream")]
-    pub(crate) fn waker(&self) -> Waker {
-        self.source.as_ref().expect("reader source not set").waker()
-    }
-
-    pub(crate) fn poll<F>(&mut self, timeout: Option<Duration>, filter: &F) -> Result<bool>
+    pub(crate) fn poll<F>(&mut self, timeout: Option<Duration>, filter: &F, option: &Waker) -> Result<bool>
     where
         F: Filter,
     {
+        // Check earlier read events.
         for event in &self.events {
             if filter.eval(&event) {
                 return Ok(true);
             }
         }
 
+        // Get event source mutable reference.
         let event_source = match self.source.as_mut() {
             Some(source) => source,
             None => {
@@ -64,30 +62,37 @@ impl InternalEventReader {
 
         let poll_timeout = PollTimeout::new(timeout);
 
+        // Loop until we received an event within the timeout and adhering to the filter.
         loop {
             let maybe_event = match event_source.try_read(timeout) {
+                // Event not supported, timeout, no events to read.
                 Ok(None) => None,
+                // An event occurred, filter it.
                 Ok(Some(event)) => {
                     if filter.eval(&event) {
                         Some(event)
                     } else {
+                        // Save for later.
                         self.skipped_events.push(event);
                         None
                     }
                 }
-                Err(ErrorKind::IoError(e)) => {
-                    if e.kind() == io::ErrorKind::Interrupted {
-                        return Ok(false);
+                Err(e) => {
+                    if let ErrorKind::IoError(e) = &e {
+                        // `poll` was awakened.
+                        if e.kind() == io::ErrorKind::Interrupted {
+                            return Ok(false);
+                        }
                     }
-
-                    return Err(ErrorKind::IoError(e));
+                    return Err(e);
                 }
-                Err(e) => return Err(e),
             };
 
             if poll_timeout.elapsed() || maybe_event.is_some() {
+                // Enqueue skipped events.
                 self.events.extend(self.skipped_events.drain(..));
 
+                // En lastly enqueue the filter adhering event.
                 if let Some(event) = maybe_event {
                     self.events.push_front(event);
                     return Ok(true);
@@ -105,6 +110,7 @@ impl InternalEventReader {
         let mut skipped_events = VecDeque::new();
 
         loop {
+            // Filter until we get the right event from cache.
             while let Some(event) = self.events.pop_front() {
                 if filter.eval(&event) {
                     while let Some(event) = skipped_events.pop_front() {
@@ -124,7 +130,8 @@ impl InternalEventReader {
                 }
             }
 
-            let _ = self.poll(None, filter)?;
+            // No events, perform a blocking `poll` for new events.
+            let _ = self.poll(None, filter, None)?;
         }
     }
 }

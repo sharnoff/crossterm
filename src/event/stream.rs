@@ -35,6 +35,7 @@ pub struct EventStream {
     poll_internal_waker: Waker,
     stream_wake_thread_spawned: Arc<AtomicBool>,
     stream_wake_thread_should_shutdown: Arc<AtomicBool>,
+    waker: Waker,
 }
 
 impl Default for EventStream {
@@ -43,6 +44,7 @@ impl Default for EventStream {
             poll_internal_waker: INTERNAL_EVENT_READER.write().waker(),
             stream_wake_thread_spawned: Arc::new(AtomicBool::new(false)),
             stream_wake_thread_should_shutdown: Arc::new(AtomicBool::new(false)),
+            waker: Waker::new().expect("Failed to initialize stream waker.")
         }
     }
 }
@@ -76,7 +78,7 @@ impl Stream for EventStream {
     type Item = Result<Event>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let result = match poll_internal(Some(Duration::from_secs(0)), &EventFilter) {
+        let result = match poll_internal(Some(Duration::from_secs(0)), &EventFilter, Some(&self.waker)) {
             Ok(true) => match read_internal(&EventFilter) {
                 Ok(InternalEvent::Event(event)) => Poll::Ready(Some(Ok(event))),
                 Err(e) => Poll::Ready(Some(Err(e))),
@@ -119,7 +121,6 @@ impl Stream for EventStream {
 
 impl Drop for EventStream {
     fn drop(&mut self) {
-        println!("DPPIIING");
         self.stream_wake_thread_should_shutdown
             .store(true, Ordering::SeqCst);
         let _ = self.poll_internal_waker.wake();

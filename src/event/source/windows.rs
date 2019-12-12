@@ -4,9 +4,8 @@ use crossterm_winapi::{Console, Handle, InputEventType, KeyEventRecord, MouseEve
 
 use crate::event::{sys::windows::poll::WinApiPoll, Event};
 
-#[cfg(feature = "event-stream")]
-use super::super::sys::Waker;
 use super::super::{
+    sys::Waker,
     source::EventSource,
     sys::windows::parse::{handle_key_event, handle_mouse_event},
     timeout::PollTimeout,
@@ -29,11 +28,11 @@ impl WindowsEventSource {
 }
 
 impl EventSource for WindowsEventSource {
-    fn try_read(&mut self, timeout: Option<Duration>) -> Result<Option<InternalEvent>> {
+    fn try_read(&mut self, timeout: Option<Duration>, waker: Option<&Waker>) -> Result<Option<InternalEvent>> {
         let poll_timeout = PollTimeout::new(timeout);
 
         loop {
-            if let Some(event_ready) = self.poll.poll(timeout)? {
+            if let Some(event_ready) = self.poll.poll(timeout, waker)? {
                 if event_ready && self.console.number_of_console_input_events()? != 0 {
                     let input = self.console.read_single_input_event()?;
 

@@ -4,9 +4,8 @@ use std::{collections::VecDeque, time::Duration};
 
 use crate::Result;
 
-#[cfg(feature = "event-stream")]
-use super::super::sys::Waker;
 use super::super::{
+    sys::Waker,
     source::EventSource,
     sys::unix::{
         file_descriptor::{tty_fd, FileDesc},
@@ -69,11 +68,6 @@ impl UnixInternalEventSource {
         let signals = Signals::new(&[signal_hook::SIGWINCH])?;
         poll.register(&signals, SIGNAL_TOKEN, Ready::readable(), PollOpt::level())?;
 
-        #[cfg(feature = "event-stream")]
-        let waker = Waker::new()?;
-        #[cfg(feature = "event-stream")]
-        poll.register(&waker, WAKE_TOKEN, Ready::readable(), PollOpt::level())?;
-
         Ok(UnixInternalEventSource {
             poll,
             events: Events::with_capacity(3),
@@ -88,10 +82,10 @@ impl UnixInternalEventSource {
 }
 
 impl EventSource for UnixInternalEventSource {
-    fn try_read(&mut self, timeout: Option<Duration>) -> Result<Option<InternalEvent>> {
-        if let Some(event) = self.parser.next() {
-            return Ok(Some(event));
-        }
+    fn try_read(&mut self, timeout: Option<Duration>, waker: Option<&Waker>) -> Result<Option<InternalEvent>> {
+        self.poll.register(&waker, WAKE_TOKEN, Ready::readable(), PollOpt::level());
+
+        self.parser.next().map(|event| return Ok(Some(event)));
 
         let timeout = PollTimeout::new(timeout);
         let mut additional_input_events = Events::with_capacity(3);
@@ -149,7 +143,7 @@ impl EventSource for UnixInternalEventSource {
                     }
                     #[cfg(feature = "event-stream")]
                     WAKE_TOKEN => {
-                        let _ = self.waker.reset();
+                        self.poll.deregister(&handle);
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::Interrupted,
                             "Poll operation was woken up by `Waker::wake`",
@@ -165,11 +159,6 @@ impl EventSource for UnixInternalEventSource {
                 return Ok(None);
             }
         }
-    }
-
-    #[cfg(feature = "event-stream")]
-    fn waker(&self) -> Waker {
-        self.waker.clone()
     }
 }
 

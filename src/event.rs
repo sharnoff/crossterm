@@ -84,6 +84,7 @@ pub use stream::EventStream;
 use timeout::PollTimeout;
 
 use crate::{Command, Result};
+use crate::event::sys::Waker;
 
 mod ansi;
 pub(crate) mod filter;
@@ -141,7 +142,7 @@ lazy_static! {
 /// }
 /// ```
 pub fn poll(timeout: Duration) -> Result<bool> {
-    poll_internal(Some(timeout), &EventFilter)
+    poll_internal(Some(timeout), &EventFilter, None)
 }
 
 /// Reads a single [`Event`](enum.Event.html).
@@ -192,12 +193,13 @@ pub fn read() -> Result<Event> {
 }
 
 /// Polls to check if there are any `InternalEvent`s that can be read withing the given duration.
-pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F) -> Result<bool>
+pub(crate) fn poll_internal<F>(timeout: Option<Duration>, filter: &F, waker: &Option<Waker>) -> Result<bool>
 where
     F: Filter,
 {
     let (mut reader, timeout) = if let Some(timeout) = timeout {
         let poll_timeout = PollTimeout::new(Some(timeout));
+
         if let Some(reader) = INTERNAL_EVENT_READER.try_write_for(timeout) {
             (reader, poll_timeout.leftover())
         } else {
@@ -206,6 +208,7 @@ where
     } else {
         (INTERNAL_EVENT_READER.write(), None)
     };
+
     reader.poll(timeout, filter)
 }
 
@@ -420,4 +423,38 @@ pub(crate) enum InternalEvent {
     /// A cursor position (`col`, `row`).
     #[cfg(unix)]
     CursorPosition(u16, u16),
+}
+
+#[cfg(test)]
+mod tests {
+    use std::thread;
+    use crate::event::poll_internal;
+    use crate::event::filter::InternalEventFilter;
+    use std::time::Duration;
+    use super::INTERNAL_EVENT_READER;
+
+    #[test]
+    pub fn awake_stream() {
+        let waker1 = INTERNAL_EVENT_READER.read().waker();
+        let waker2 = INTERNAL_EVENT_READER.read().waker();
+
+        let thread_a = thread::spawn(|| {
+            poll_internal(None, &InternalEventFilter).unwrap();
+        });
+
+        let thread_b = thread::spawn(|| {
+            poll_internal(None, &InternalEventFilter).unwrap();
+        });
+
+        println!("sleeping ...");
+        thread::sleep(Duration::from_millis(1000));
+
+        waker1.wake().unwrap();
+        waker2.wake().unwrap();
+
+        println!("wait a ...");
+        thread_a.join().unwrap();
+        println!("wait b ...");
+        thread_b.join().unwrap();
+    }
 }

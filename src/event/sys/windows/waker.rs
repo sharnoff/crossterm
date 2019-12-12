@@ -4,10 +4,15 @@ use crossterm_winapi::Semaphore;
 
 use crate::Result;
 
+
+pub struct CancelTx(Semaphore);
+
+pub struct CancelRx(Semaphore);
+
 /// Allows to wake up the `WinApiPoll::poll()` method.
 #[derive(Clone)]
 pub(crate) struct Waker {
-    inner: Arc<Mutex<Semaphore>>,
+    inner: Semaphore,
 }
 
 impl Waker {
@@ -19,24 +24,18 @@ impl Waker {
         let inner = Semaphore::new()?;
 
         Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
+            inner
         })
     }
 
     /// Wakes the `WaitForMultipleObjects`.
     pub(crate) fn wake(&self) -> Result<()> {
-        self.inner.lock().unwrap().release()?;
-        Ok(())
-    }
-
-    /// Replaces the current semaphore with a new one allowing us to reuse the same `Waker`.
-    pub(crate) fn reset(&self) -> Result<()> {
-        *self.inner.lock().unwrap() = Semaphore::new()?;
+        self.inner.release()?;
         Ok(())
     }
 
     /// Returns the semaphore associated with the waker.
     pub(crate) fn semaphore(&self) -> Semaphore {
-        self.inner.lock().unwrap().clone()
+        self.inner.clone()
     }
 }
