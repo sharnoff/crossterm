@@ -2,7 +2,10 @@
 //!
 //! cargo run --features event-stream --example event-stream-tokio
 
-use std::{io::{stdout, Write}, time::{Instant, Duration}, thread};
+use std::{
+    io::{stdout, Write},
+    time::Duration,
+};
 
 use futures::{future::FutureExt, select, StreamExt};
 use futures_timer::Delay;
@@ -15,16 +18,6 @@ use crossterm::{
     Result,
 };
 
-use futures::stream::Next;
-use futures::future::{Fuse, JoinAll, join};
-use std::thread::spawn;
-use futures::stream::TryStreamExt;
-use std::iter::FromIterator;
-use tokio::runtime::Runtime;
-use std::sync::{Mutex, Arc};
-use futures::executor::block_on;
-use tokio::task;
-
 const HELP: &str = r#"EventStream based on futures::Stream with tokio
  - Keyboard, mouse and terminal resize events enabled
  - Prints "." every second if there's no event
@@ -32,28 +25,22 @@ const HELP: &str = r#"EventStream based on futures::Stream with tokio
  - Use Esc to quit
 "#;
 
-async fn print_events(name: &str, duration: Duration) {
+async fn print_events() {
     let mut reader = EventStream::new();
 
-    let instant = Instant::now();
-
     loop {
-        if instant.elapsed() > duration {
-            break;
-        }
-
+        let mut delay = Delay::new(Duration::from_millis(1_000)).fuse();
         let mut event = reader.next().fuse();
-        let mut delay = Delay::new(duration).fuse();
 
         select! {
-            _ = delay => { drop(reader); break; },
+            _ = delay => { println!(".\r"); },
             maybe_event = event => {
                 match maybe_event {
                     Some(Ok(event)) => {
-                        println!("ffrom {} | Event::{:?} \r ", name, event);
+                        println!("Event::{:?}\r", event);
 
                         if event == Event::Key(KeyCode::Char('c').into()) {
-                            println!("Cursor position: {:?} \r", position());
+                            println!("Cursor position: {:?}\r", position());
                         }
 
                         if event == Event::Key(KeyCode::Esc.into()) {
@@ -70,24 +57,16 @@ async fn print_events(name: &str, duration: Duration) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("{}", HELP);
+
     enable_raw_mode()?;
 
-    let threada = thread::spawn(move|| {
-        println!("EventStream A");
-        block_on(print_events("Thread A", Duration::from_secs(5)));
-    });
+    let mut stdout = stdout();
+    execute!(stdout, EnableMouseCapture)?;
 
-    let threadb = thread::spawn(move || {
-        println!("EventStream B");
-        block_on(print_events("Thread B", Duration::from_secs(8)));
-    });
+    print_events().await;
 
-    println!("joining A"); /* stream a is dropped after 5 secs */
-    threada.join();
-    println!("joining B"); /* stream b is dropped after 8 secs */
-    threadb.join();
-
-    println!("joined A and B");
+    execute!(stdout, DisableMouseCapture)?;
 
     disable_raw_mode()
 }
