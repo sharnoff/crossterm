@@ -1,4 +1,5 @@
 use std::{
+    io,
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -12,8 +13,6 @@ use futures_core::{
     stream::Stream,
     task::{Context, Poll},
 };
-
-use crate::Result;
 
 use super::{
     filter::EventFilter, poll_internal, read_internal, sys::Waker, Event, InternalEvent,
@@ -74,7 +73,7 @@ impl EventStream {
 // We have to wake up the poll_internal (force it to return Ok(false)) and quit
 // the thread before we drop.
 impl Stream for EventStream {
-    type Item = Result<Event>;
+    type Item = io::Result<Event>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let result = match poll_internal(Some(Duration::from_secs(0)), &EventFilter) {

@@ -1,8 +1,7 @@
+use std::io;
 use std::sync::{Arc, Mutex};
 
 use crossterm_winapi::Semaphore;
-
-use crate::Result;
 
 /// Allows to wake up the `WinApiPoll::poll()` method.
 #[derive(Clone, Debug)]
@@ -15,7 +14,7 @@ impl Waker {
     ///
     /// `Waker` is based on the `Semaphore`. You have to use the semaphore
     /// handle along with the `WaitForMultipleObjects`.
-    pub(crate) fn new() -> Result<Self> {
+    pub(crate) fn new() -> io::Result<Self> {
         let inner = Semaphore::new()?;
 
         Ok(Self {
@@ -24,13 +23,13 @@ impl Waker {
     }
 
     /// Wakes the `WaitForMultipleObjects`.
-    pub(crate) fn wake(&self) -> Result<()> {
+    pub(crate) fn wake(&self) -> io::Result<()> {
         self.inner.lock().unwrap().release()?;
         Ok(())
     }
 
     /// Replaces the current semaphore with a new one allowing us to reuse the same `Waker`.
-    pub(crate) fn reset(&self) -> Result<()> {
+    pub(crate) fn reset(&self) -> io::Result<()> {
         *self.inner.lock().unwrap() = Semaphore::new()?;
         Ok(())
     }

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{io, time::Duration};
 
 use crossterm_winapi::{Console, Handle, InputRecord};
 
@@ -10,7 +10,7 @@ use super::super::{
     source::EventSource,
     sys::windows::parse::{handle_key_event, handle_mouse_event},
     timeout::PollTimeout,
-    InternalEvent, Result,
+    InternalEvent,
 };
 
 pub(crate) struct WindowsEventSource {
@@ -19,7 +19,7 @@ pub(crate) struct WindowsEventSource {
 }
 
 impl WindowsEventSource {
-    pub(crate) fn new() -> Result<WindowsEventSource> {
+    pub(crate) fn new() -> io::Result<WindowsEventSource> {
         let console = Console::from(Handle::current_in_handle()?);
         Ok(WindowsEventSource {
             console,
@@ -29,15 +29,15 @@ impl WindowsEventSource {
 }
 
 impl EventSource for WindowsEventSource {
-    fn try_read(&mut self, timeout: Option<Duration>) -> Result<Option<InternalEvent>> {
+    fn try_read(&mut self, timeout: Option<Duration>) -> io::Result<Option<InternalEvent>> {
         let poll_timeout = PollTimeout::new(timeout);
 
         loop {
             if let Some(event_ready) = self.poll.poll(poll_timeout.leftover())? {
                 if event_ready && self.console.number_of_console_input_events()? != 0 {
                     let event = match self.console.read_single_input_event()? {
-                        InputRecord::KeyEvent(record) => handle_key_event(record)?,
-                        InputRecord::MouseEvent(record) => handle_mouse_event(record)?,
+                        InputRecord::KeyEvent(record) => handle_key_event(record),
+                        InputRecord::MouseEvent(record) => handle_mouse_event(record),
                         InputRecord::WindowBufferSizeEvent(record) => {
                             Some(Event::Resize(record.size.x as u16, record.size.y as u16))
                         }

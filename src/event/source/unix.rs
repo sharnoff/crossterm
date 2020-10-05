@@ -2,8 +2,6 @@ use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use signal_hook::iterator::Signals;
 use std::{collections::VecDeque, io, time::Duration};
 
-use crate::{ErrorKind, Result};
-
 #[cfg(feature = "event-stream")]
 use super::super::sys::Waker;
 use super::super::{
@@ -39,11 +37,11 @@ pub(crate) struct UnixInternalEventSource {
 }
 
 impl UnixInternalEventSource {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> io::Result<Self> {
         Ok(UnixInternalEventSource::from_file_descriptor(tty_fd()?)?)
     }
 
-    pub(crate) fn from_file_descriptor(input_fd: FileDesc) -> Result<Self> {
+    pub(crate) fn from_file_descriptor(input_fd: FileDesc) -> io::Result<Self> {
         let poll = Poll::new()?;
         let registry = poll.registry();
 
@@ -71,7 +69,7 @@ impl UnixInternalEventSource {
 }
 
 impl EventSource for UnixInternalEventSource {
-    fn try_read(&mut self, timeout: Option<Duration>) -> Result<Option<InternalEvent>> {
+    fn try_read(&mut self, timeout: Option<Duration>) -> io::Result<Option<InternalEvent>> {
         if let Some(event) = self.parser.next() {
             return Ok(Some(event));
         }
@@ -86,7 +84,7 @@ impl EventSource for UnixInternalEventSource {
                 if e.kind() == io::ErrorKind::Interrupted {
                     continue;
                 } else {
-                    return Err(ErrorKind::IoError(e));
+                    return Err(e);
                 }
             };
 
@@ -108,7 +106,7 @@ impl EventSource for UnixInternalEventSource {
                                         );
                                     }
                                 }
-                                Err(ErrorKind::IoError(e)) => {
+                                Err(e) => {
                                     // No more data to read at the moment. We will receive another event
                                     if e.kind() == io::ErrorKind::WouldBlock {
                                         break;
@@ -118,7 +116,6 @@ impl EventSource for UnixInternalEventSource {
                                         continue;
                                     }
                                 }
-                                Err(e) => return Err(e),
                             };
 
                             if let Some(event) = self.parser.next() {
@@ -148,11 +145,10 @@ impl EventSource for UnixInternalEventSource {
                     }
                     #[cfg(feature = "event-stream")]
                     WAKE_TOKEN => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Interrupted,
+                        return Err(io::Error::new(
+                            io::ErrorKind::Interrupted,
                             "Poll operation was woken up by `Waker::wake`",
-                        )
-                        .into());
+                        ));
                     }
                     _ => unreachable!("Synchronize Evented handle registration & token handling"),
                 }

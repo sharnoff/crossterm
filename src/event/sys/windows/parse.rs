@@ -1,3 +1,5 @@
+use std::io;
+
 use crossterm_winapi::{ControlKeyState, EventFlags, KeyEventRecord, MouseEvent, ScreenBuffer};
 use winapi::um::{
     wincon::{
@@ -9,26 +11,24 @@ use winapi::um::{
     },
 };
 
-use crate::{
-    event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton},
-    Result,
-};
+use crate::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton};
 
-pub(crate) fn handle_mouse_event(mouse_event: MouseEvent) -> Result<Option<Event>> {
+pub(crate) fn handle_mouse_event(mouse_event: MouseEvent) -> Option<Event> {
     if let Ok(Some(event)) = parse_mouse_event_record(&mouse_event) {
-        return Ok(Some(Event::Mouse(event)));
+        return Some(Event::Mouse(event));
     }
-    Ok(None)
+
+    None
 }
 
-pub(crate) fn handle_key_event(key_event: KeyEventRecord) -> Result<Option<Event>> {
+pub(crate) fn handle_key_event(key_event: KeyEventRecord) -> Option<Event> {
     if key_event.key_down {
         if let Some(event) = parse_key_event_record(&key_event) {
-            return Ok(Some(Event::Key(event)));
+            return Some(Event::Key(event));
         }
     }
 
-    Ok(None)
+    None
 }
 
 impl From<ControlKeyState> for KeyModifiers {
@@ -122,12 +122,12 @@ fn parse_key_event_record(key_event: &KeyEventRecord) -> Option<KeyEvent> {
 
 // The 'y' position of a mouse event or resize event is not relative to the window but absolute to screen buffer.
 // This means that when the mouse cursor is at the top left it will be x: 0, y: 2295 (e.g. y = number of cells conting from the absolute buffer height) instead of relative x: 0, y: 0 to the window.
-pub fn parse_relative_y(y: i16) -> Result<i16> {
+pub fn parse_relative_y(y: i16) -> io::Result<i16> {
     let window_size = ScreenBuffer::current()?.info()?.terminal_window();
     Ok(y - window_size.top)
 }
 
-fn parse_mouse_event_record(event: &MouseEvent) -> Result<Option<crate::event::MouseEvent>> {
+fn parse_mouse_event_record(event: &MouseEvent) -> io::Result<Option<crate::event::MouseEvent>> {
     let modifiers = KeyModifiers::from(event.control_key_state);
 
     let xpos = event.mouse_position.x as u16;
