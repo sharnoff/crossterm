@@ -112,7 +112,7 @@ pub fn disable_raw_mode() -> Result<()> {
 /// Returns the terminal size `(columns, rows)`.
 ///
 /// The top left cell is represented `(1, 1)`.
-pub fn size() -> Result<(u16, u16)> {
+pub fn size() -> std::io::Result<(u16, u16)> {
     sys::size()
 }
 

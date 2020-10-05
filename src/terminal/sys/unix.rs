@@ -22,8 +22,7 @@ pub(crate) fn is_raw_mode_enabled() -> bool {
     TERMINAL_MODE_PRIOR_RAW_MODE.lock().unwrap().is_some()
 }
 
-#[allow(clippy::useless_conversion)]
-pub(crate) fn size() -> Result<(u16, u16)> {
+pub(crate) fn size() -> io::Result<(u16, u16)> {
     // http://rosettacode.org/wiki/Terminal_control/Dimensions#Library:_BSD_libc
     let mut size = winsize {
         ws_row: 0,
@@ -40,10 +39,10 @@ pub(crate) fn size() -> Result<(u16, u16)> {
         STDOUT_FILENO
     };
 
-    if let Ok(true) = wrap_with_result(unsafe { ioctl(fd, TIOCGWINSZ.into(), &mut size) }) {
+    if let Ok(true) = wrap_with_result(unsafe { ioctl(fd, TIOCGWINSZ, &mut size) }) {
         Ok((size.ws_col, size.ws_row))
     } else {
-        tput_size().ok_or_else(|| std::io::Error::last_os_error().into())
+        tput_size().ok_or_else(std::io::Error::last_os_error)
     }
 }
 
