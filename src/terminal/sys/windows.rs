@@ -1,4 +1,6 @@
 //! WinApi related logic for terminal manipulation.
+use std::io;
+
 use crossterm_winapi::{Console, ConsoleMode, Coord, Handle, ScreenBuffer, Size};
 use winapi::{
     shared::minwindef::DWORD,
@@ -9,7 +11,7 @@ use crate::{cursor, terminal::ClearType, ErrorKind, Result};
 
 const RAW_MODE_MASK: DWORD = ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT;
 
-pub(crate) fn enable_raw_mode() -> Result<()> {
+pub(crate) fn enable_raw_mode() -> io::Result<()> {
     let console_mode = ConsoleMode::from(Handle::current_in_handle()?);
 
     let dw_mode = console_mode.mode()?;
@@ -21,7 +23,7 @@ pub(crate) fn enable_raw_mode() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn disable_raw_mode() -> Result<()> {
+pub(crate) fn disable_raw_mode() -> io::Result<()> {
     let console_mode = ConsoleMode::from(Handle::current_in_handle()?);
 
     let dw_mode = console_mode.mode()?;
@@ -33,7 +35,7 @@ pub(crate) fn disable_raw_mode() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn size() -> std::io::Result<(u16, u16)> {
+pub(crate) fn size() -> io::Result<(u16, u16)> {
     let terminal_size = ScreenBuffer::current()?.info()?.terminal_size();
     // windows starts counting at 0, unix at 1, add one to replicated unix behaviour.
     Ok((

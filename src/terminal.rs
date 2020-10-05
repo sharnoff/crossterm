@@ -81,6 +81,8 @@
 //!
 //! For manual execution control check out [crossterm::queue](../macro.queue.html).
 
+use std::io;
+
 #[cfg(windows)]
 use crossterm_winapi::{ConsoleMode, Handle, ScreenBuffer};
 #[cfg(feature = "serde")]
@@ -88,9 +90,11 @@ use serde::{Deserialize, Serialize};
 #[cfg(windows)]
 use winapi::um::wincon::ENABLE_WRAP_AT_EOL_OUTPUT;
 
+use crate::impl_display;
 #[doc(no_inline)]
 use crate::Command;
-use crate::{impl_display, Result};
+#[cfg(windows)]
+use crate::Result;
 
 mod ansi;
 pub(crate) mod sys;
@@ -98,21 +102,21 @@ pub(crate) mod sys;
 /// Enables raw mode.
 ///
 /// Please have a look at the [raw mode](./#raw-mode) section.
-pub fn enable_raw_mode() -> Result<()> {
+pub fn enable_raw_mode() -> io::Result<()> {
     sys::enable_raw_mode()
 }
 
 /// Disables raw mode.
 ///
 /// Please have a look at the [raw mode](./#raw-mode) section.
-pub fn disable_raw_mode() -> Result<()> {
+pub fn disable_raw_mode() -> io::Result<()> {
     sys::disable_raw_mode()
 }
 
 /// Returns the terminal size `(columns, rows)`.
 ///
 /// The top left cell is represented `(1, 1)`.
-pub fn size() -> std::io::Result<(u16, u16)> {
+pub fn size() -> io::Result<(u16, u16)> {
     sys::size()
 }
 

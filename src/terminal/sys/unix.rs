@@ -8,7 +8,6 @@ use libc::{
     STDOUT_FILENO, TCSANOW, TIOCGWINSZ,
 };
 
-use crate::error::{ErrorKind, Result};
 use std::fs::File;
 use std::os::unix::io::IntoRawFd;
 
@@ -39,14 +38,14 @@ pub(crate) fn size() -> io::Result<(u16, u16)> {
         STDOUT_FILENO
     };
 
-    if let Ok(true) = wrap_with_result(unsafe { ioctl(fd, TIOCGWINSZ, &mut size) }) {
+    if let Ok(true) = wrap_with_io_result(unsafe { ioctl(fd, TIOCGWINSZ, &mut size) }) {
         Ok((size.ws_col, size.ws_row))
     } else {
         tput_size().ok_or_else(std::io::Error::last_os_error)
     }
 }
 
-pub(crate) fn enable_raw_mode() -> Result<()> {
+pub(crate) fn enable_raw_mode() -> io::Result<()> {
     let mut original_mode = TERMINAL_MODE_PRIOR_RAW_MODE.lock().unwrap();
 
     if original_mode.is_some() {
@@ -65,7 +64,7 @@ pub(crate) fn enable_raw_mode() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn disable_raw_mode() -> Result<()> {
+pub(crate) fn disable_raw_mode() -> io::Result<()> {
     let mut original_mode = TERMINAL_MODE_PRIOR_RAW_MODE.lock().unwrap();
 
     if let Some(original_mode_ios) = original_mode.as_ref() {
@@ -115,21 +114,21 @@ fn raw_terminal_attr(termios: &mut Termios) {
     unsafe { cfmakeraw(termios) }
 }
 
-fn get_terminal_attr() -> Result<Termios> {
+fn get_terminal_attr() -> io::Result<Termios> {
     unsafe {
         let mut termios = mem::zeroed();
-        wrap_with_result(tcgetattr(STDIN_FILENO, &mut termios))?;
+        wrap_with_io_result(tcgetattr(STDIN_FILENO, &mut termios))?;
         Ok(termios)
     }
 }
 
-fn set_terminal_attr(termios: &Termios) -> Result<bool> {
-    wrap_with_result(unsafe { tcsetattr(STDIN_FILENO, TCSANOW, termios) })
+fn set_terminal_attr(termios: &Termios) -> io::Result<bool> {
+    wrap_with_io_result(unsafe { tcsetattr(STDIN_FILENO, TCSANOW, termios) })
 }
 
-pub fn wrap_with_result(result: i32) -> Result<bool> {
+pub fn wrap_with_io_result(result: i32) -> io::Result<bool> {
     if result == -1 {
-        Err(ErrorKind::IoError(io::Error::last_os_error()))
+        Err(io::Error::last_os_error())
     } else {
         Ok(true)
     }
